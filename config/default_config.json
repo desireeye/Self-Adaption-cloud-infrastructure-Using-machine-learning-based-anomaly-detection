@@ -1,0 +1,46 @@
+{
+  "monitoring": {
+    "max_samples": 1000,
+    "sampling_interval": 1.0,
+    "resource_thresholds": {
+      "cpu_high": 80.0,
+      "memory_high": 85.0,
+      "disk_high": 90.0,
+      "network_burst": 1000000000
+    }
+  },
+  "preprocessing": {
+    "scaler_type": "standard",
+    "handle_missing": true,
+    "remove_outliers": true,
+    "outlier_multiplier": 1.5
+  },
+  "anomaly_detection": {
+    "contamination": 0.05,
+    "model_type": "isolation_forest",
+    "training_samples_required": 50
+  },
+  "decision_engine": {
+    "learning_rate": 0.1,
+    "history_window": 100,
+    "anomaly_cooldown_seconds": 30
+  },
+  "recovery": {
+    "executor_type": "local",
+    "enable_escalation": true,
+    "max_recovery_attempts": 3
+  },
+  "cloud": {
+    "provider": "aws",
+    "region": "us-east-1",
+    "enable_auto_scaling": true,
+    "min_instances": 1,
+    "max_instances": 10,
+    "target_cpu_utilization": 70.0
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "file": "logs/system.log"
+  }
+}
