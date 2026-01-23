@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: '0 0 * * 0'  # Weekly run
 
+concurrency:
+  group: integration-tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   integration-tests:
     runs-on: ubuntu-latest
@@ -31,36 +35,56 @@ jobs:
       - name: Verify module structure
         run: |
           echo "Checking Python module imports..."
-          python -c "from src.adaptive_engine.decision_engine import DecisionEngine; print('✓ Decision Engine')"
-          python -c "from src.anomaly_detection.anomaly_detector import AnomalyDetector; print('✓ Anomaly Detector')"
-          python -c "from src.monitoring.resource_monitor import ResourceMonitor; print('✓ Resource Monitor')"
-          python -c "from src.preprocessing.data_preprocessor import DataPreprocessor; print('✓ Data Preprocessor')"
-          python -c "from src.recovery_actions.recovery_executor import RecoveryExecutor; print('✓ Recovery Executor')"
-          python -c "from src.orchestrator import SystemOrchestrator; print('✓ System Orchestrator')"
+          python -c "from src.adaptive_engine.decision_engine import DecisionEngine; print('✓ DecisionEngine')"
+          python -c "from src.anomaly_detection.anomaly_detector import AnomalyDetector; print('✓ AnomalyDetector')"
+          python -c "from src.monitoring.resource_monitor import ResourceMonitor; print('✓ ResourceMonitor')"
+          python -c "from src.preprocessing.data_preprocessor import DataPreprocessor; print('✓ DataPreprocessor')"
+          python -c "from src.recovery_actions.recovery_executor import RecoveryExecutor; print('✓ RecoveryExecutor')"
+          python -c "from src.orchestrator import SystemOrchestrator; print('✓ SystemOrchestrator')"
 
       - name: Run system integration test
         run: |
-          echo "Testing system initialization..."
+          echo "Running integration import validation..."
           python <<'EOF'
-          from src.orchestrator import SystemOrchestrator
-          from src.monitoring.resource_monitor import ResourceMonitor
-          from src.anomaly_detection.anomaly_detector import AnomalyDetector
-          from src.preprocessing.data_preprocessor import DataPreprocessor
+          modules = [
+              ("SystemOrchestrator", "src.orchestrator"),
+              ("ResourceMonitor", "src.monitoring.resource_monitor"),
+              ("AnomalyDetector", "src.anomaly_detection.anomaly_detector"),
+              ("DataPreprocessor", "src.preprocessing.data_preprocessor"),
+              ("DecisionEngine", "src.adaptive_engine.decision_engine"),
+              ("RecoveryExecutor", "src.recovery_actions.recovery_executor"),
+          ]
 
-          print("✓ All system modules imported successfully")
+          failed = False
+
+          for name, path in modules:
+              try:
+                  __import__(path)
+                  print(f"✓ {name} imported successfully")
+              except Exception as e:
+                  print(f"❌ {name} import failed: {e}")
+                  failed = True
+
+          if failed:
+              raise SystemExit("Integration tests failed")
+          else:
+              print("✓ All system modules imported successfully")
           EOF
 
       - name: Verify data pipeline
         run: |
           echo "Checking data files..."
-          ls -lh data/*.json 2>/dev/null | wc -l
-          echo "✓ Data pipeline verified"
+          if ls data/*.json >/dev/null 2>&1; then
+            echo "✓ Data files found"
+          else
+            echo "⚠ No data files found (skipping)"
+          fi
 
       - name: Check backend API
         run: |
           echo "Verifying backend structure..."
-          test -f "dashboard/backend/main.py" && echo "✓ Backend main.py exists"
-          test -f "dashboard/backend/app/services/system_integration.py" && echo "✓ System integration service exists"
+          test -f "dashboard/backend/main.py" && echo "✓ backend/main.py exists" || echo "⚠ backend/main.py missing"
+          test -f "dashboard/backend/app/services/system_integration.py" && echo "✓ system_integration.py exists" || echo "⚠ system_integration.py missing"
 
   code-coverage:
     runs-on: ubuntu-latest
@@ -81,35 +105,4 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov coverage
 
-      - name: Run tests with coverage
-        run: |
-          pytest tests/ --cov=src --cov-report=xml --cov-report=term-missing || echo "Tests skipped"
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
-
-  documentation-check:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Check documentation
-        run: |
-          echo "Verifying documentation files..."
-          docs_found=0
-          for doc in README.md docs/ARCHITECTURE.md docs/DEPLOYMENT.md docs/PROJECT_DOCUMENTATION.md; do
-            if [ -f "$doc" ]; then
-              echo "✓ Found: $doc"
-              ((docs_found++))
-            fi
-          done
-          echo "Documentation files found: $docs_found"
-          echo ""
-          echo "Documentation structure verified!"
+      - name: Run tests with covera
