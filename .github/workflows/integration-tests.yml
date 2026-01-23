@@ -35,34 +35,34 @@ jobs:
       - name: Verify module structure
         run: |
           echo "Checking Python module imports..."
-          python -c "from src.adaptive_engine.decision_engine import DecisionEngine; print('✓ DecisionEngine')"
-          python -c "from src.anomaly_detection.anomaly_detector import AnomalyDetector; print('✓ AnomalyDetector')"
-          python -c "from src.monitoring.resource_monitor import ResourceMonitor; print('✓ ResourceMonitor')"
-          python -c "from src.preprocessing.data_preprocessor import DataPreprocessor; print('✓ DataPreprocessor')"
-          python -c "from src.recovery_actions.recovery_executor import RecoveryExecutor; print('✓ RecoveryExecutor')"
-          python -c "from src.orchestrator import SystemOrchestrator; print('✓ SystemOrchestrator')"
+          python -c "import src.adaptive_engine.decision_engine; print('✓ decision_engine module')"
+          python -c "import src.anomaly_detection.anomaly_detector; print('✓ anomaly_detector module')"
+          python -c "import src.monitoring.resource_monitor; print('✓ resource_monitor module')"
+          python -c "import src.preprocessing.data_preprocessor; print('✓ data_preprocessor module')"
+          python -c "import src.recovery_actions.recovery_executor; print('✓ recovery_executor module')"
+          python -c "import src.orchestrator; print('✓ orchestrator module')"
 
       - name: Run system integration test
         run: |
           echo "Running integration import validation..."
           python <<'EOF'
           modules = [
-              ("SystemOrchestrator", "src.orchestrator"),
-              ("ResourceMonitor", "src.monitoring.resource_monitor"),
-              ("AnomalyDetector", "src.anomaly_detection.anomaly_detector"),
-              ("DataPreprocessor", "src.preprocessing.data_preprocessor"),
-              ("DecisionEngine", "src.adaptive_engine.decision_engine"),
-              ("RecoveryExecutor", "src.recovery_actions.recovery_executor"),
+              "src.orchestrator",
+              "src.monitoring.resource_monitor",
+              "src.anomaly_detection.anomaly_detector",
+              "src.preprocessing.data_preprocessor",
+              "src.adaptive_engine.decision_engine",
+              "src.recovery_actions.recovery_executor",
           ]
 
           failed = False
 
-          for name, path in modules:
+          for module in modules:
               try:
-                  __import__(path)
-                  print(f"✓ {name} imported successfully")
+                  __import__(module)
+                  print(f"✓ {module} imported successfully")
               except Exception as e:
-                  print(f"❌ {name} import failed: {e}")
+                  print(f"❌ {module} import failed: {e}")
                   failed = True
 
           if failed:
