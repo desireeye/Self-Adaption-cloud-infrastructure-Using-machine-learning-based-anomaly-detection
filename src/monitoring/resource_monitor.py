@@ -23,23 +23,16 @@ class ResourceMonitor:
     """
 
     def __init__(self, max_samples: int = 1000, sampling_interval: float = 1.0):
-        """
-        Initialize ResourceMonitor
-
-        Args:
-            max_samples: Maximum samples to keep in memory
-            sampling_interval: Time between samples in seconds
-        """
         self.max_samples = max_samples
         self.sampling_interval = sampling_interval
         self.is_monitoring = False
         self.monitor_thread = None
 
-        # Data buffers (fixed-size FIFO)
+        # Data buffers
         self.metrics = deque(maxlen=max_samples)
         self.lock = threading.Lock()
 
-        # Store previous network stats for delta calculation
+        # Previous network stats
         self.prev_net_io = None
 
     def start(self) -> None:
@@ -75,31 +68,16 @@ class ResourceMonitor:
             time.sleep(self.sampling_interval)
 
     def collect_metrics(self) -> Dict:
-        """
-        Collect current system metrics
-
-        Returns:
-            Dictionary with all metrics
-        """
+        """Collect current system metrics"""
         timestamp = datetime.now().isoformat()
 
-        # CPU metrics
         cpu_percent = psutil.cpu_percent(interval=0.1)
         cpu_count = psutil.cpu_count()
         cpu_freq = psutil.cpu_freq()
 
-        # Memory metrics
         memory = psutil.virtual_memory()
-
-        # Disk metrics
         disk = psutil.disk_usage("/")
-
-        # Network metrics
         net_io = psutil.net_io_counters()
-        net_metrics = self._calculate_network_metrics(net_io)
-
-        # Process metrics
-        top_processes = self._get_top_processes()
 
         return {
             "timestamp": timestamp,
@@ -120,8 +98,8 @@ class ResourceMonitor:
                 "free_gb": disk.free / (1024 ** 3),
                 "percent": disk.percent,
             },
-            "network": net_metrics,
-            "top_processes": top_processes,
+            "network": self._calculate_network_metrics(net_io),
+            "top_processes": self._get_top_processes(),
         }
 
     def _calculate_network_metrics(self, net_io) -> Dict:
@@ -147,4 +125,77 @@ class ResourceMonitor:
         self.prev_net_io = net_io
         return metrics
 
-    def _get_top_processes(self, limit: int = 5) ->_
+    def _get_top_processes(self, limit: int = 5) -> List[Dict]:
+        """Get top processes by CPU usage"""
+        processes: List[Dict] = []
+        try:
+            for proc in psutil.process_iter(
+                ["pid", "name", "cpu_percent", "memory_percent"]
+            ):
+                processes.append(proc.info)
+
+            processes.sort(
+                key=lambda x: x.get("cpu_percent", 0.0), reverse=True
+            )
+            return processes[:limit]
+
+        except Exception as e:
+            logger.warning("Error getting process info: %s", e)
+            return []
+
+    def get_latest_metrics(self) -> Optional[Dict]:
+        """Get the most recent metrics"""
+        with self.lock:
+            return self.metrics[-1] if self.metrics else None
+
+    def get_all_metrics(self) -> List[Dict]:
+        """Get all collected metrics"""
+        with self.lock:
+            return list(self.metrics)
+
+    def export_metrics_to_file(self, filepath: str) -> None:
+        """Export all metrics to a JSON file"""
+        with self.lock:
+            with open(filepath, "w") as f:
+                json.dump(list(self.metrics), f, indent=2)
+        logger.info("Metrics exported to %s", filepath)
+
+
+class ResourceThresholds:
+    """Define resource thresholds for anomaly detection"""
+
+    def __init__(self):
+        self.cpu_high = 80.0
+        self.memory_high = 85.0
+        self.disk_high = 90.0
+        self.network_burst = 1e9  # bytes/sec
+
+    def check_thresholds(self, metrics: Dict) -> Dict[str, bool]:
+        return {
+            "cpu_exceeded": metrics["cpu"]["percent"] > self.cpu_high,
+            "memory_exceeded": metrics["memory"]["percent"] > self.memory_high,
+            "disk_exceeded": metrics["disk"]["percent"] > self.disk_high,
+            "network_burst": (
+                metrics["network"]["bytes_sent_per_sec"] > self.network_burst
+                or metrics["network"]["bytes_recv_per_sec"] > self.network_burst
+            ),
+        }
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+
+    monitor = ResourceMonitor(sampling_interval=0.5)
+    monitor.start()
+
+    try:
+        for i in range(5):
+            time.sleep(1)
+            latest = monitor.get_latest_metrics()
+            if latest:
+                print(f"\nSnapshot {i + 1}")
+                print(f"CPU: {latest['cpu']['percent']:.1f}%")
+                print(f"Memory: {latest['memory']['percent']:.1f}%")
+                print(f"Disk: {latest['disk']['percent']:.1f}%")
+    finally:
+        monitor.stop()
